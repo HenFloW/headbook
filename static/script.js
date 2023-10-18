@@ -16,6 +16,7 @@ export async function fetch_json(path, method = 'GET', headers = {}) {
             ...headers,
         },
     });
+
     if (resp.ok) {
         return await resp.json();
     } else {
@@ -96,13 +97,31 @@ export const sanitizeInput = (input) => {
  * @param {*} elt An optional element to render the user into
  * @returns elt or a new element
  */
-export function format_profile(user, elt) {
+export async function format_profile(user, elt) {
     if (!elt) elt = document.createElement('div');
     elt.classList.add('user'); // set CSS class
     if (user.id == current_user_id) {
         // current_user_id is a global variable (set on 'window')
         elt.classList.add('me');
     }
+
+    const buddy = await fetch_json(`/buddies/${user.id}`, 'GET');
+    let more = `
+            ${format_field('Birth date', '?0', {}, user.birthdate)}
+            ${format_field(
+                'Favourite colour',
+                `?0<div class="color-sample" style="background:?0"></div>`,
+                {},
+                user.color,
+            )}
+            ${format_field('About', '<i>?0</i>', 'long', user.about)}
+        `;
+    if (buddy.status != 'friends' && buddy.status != 'requested' && user.id != current_user_id) {
+        more = '<i>Become friends to see more</i>';
+    }
+
+    let controls = await generate_friendship_controls(user);
+
     // TODO: is this unsafe?
     elt.innerHTML = `
         <img src="${user.picture_url || '/unknown.png'}" alt="${
@@ -111,27 +130,49 @@ export function format_profile(user, elt) {
         <div class="data">
             ${format_field('Name', '?0', {}, user.username)}
             <div class="more">
-                ${format_field('Birth date', '?0', {}, user.birthdate)}
-                ${format_field(
-                    'Favourite colour',
-                    `?0<div class="color-sample" style="background:?0"></div>`,
-                    {},
-                    user.color,
-                )}
-                ${format_field('About', '<i>?0</i>', 'long', user.about)}
+            ${more}
             </div>
         </div>
-        <div class="controls">
-            ${
-                window.current_user_id == user.id
-                    ? ''
-                    : `<button type="button" data-user-id="${user.id}" data-action="add_buddy">Add buddy</button>`
-            }
+        <div class="controls" data-controls-id="${user.id}">
+            ${controls}
         </div>
     `;
+
     return elt;
 }
 
+const generate_friendship_controls = async (user) => {
+    if (!user.id) return '';
+    if (user.id == current_user_id) return '';
+
+    const response = await fetch_json(`/buddies/${user.id}`, 'GET');
+
+    const friendship_status = response.status;
+
+    if (!friendship_status) return '';
+
+    let text = 'Add as buddy';
+    let action = action_enum.add_request;
+
+    if (friendship_status == 'pending') {
+        text = 'Pending...';
+        action = action_enum.cancel_request;
+    }
+    if (friendship_status == 'friends') {
+        text = 'Remove buddy';
+        action = action_enum.remove_friend;
+    }
+    if (friendship_status == 'requested') {
+        return `<button type="button" data-user-id="${user.id}" data-action="${action_enum.accept_request}">Accept</button>
+        <button type="button" data-user-id="${user.id}" data-action="${action_enum.reject_request}">Reject</button>`;
+    }
+
+    return `<button type="button" data-user-id="${user.id}" data-action="${action}">${text}</button>`;
+};
+
+export const generate_profile = async (user) => {
+    console.log(user);
+};
 /**
  * Perform an action, such as a button click.
  *
@@ -140,13 +181,63 @@ export function format_profile(user, elt) {
  * @param {*} element A button element with `data-action="…"` set
  * @returns true if action was performed
  */
-export async function do_action(element) {
-    if (element.dataset.action === 'add_buddy') {
-        result = await fetch_json(`/buddies/${element.dataset.userId}`, 'POST');
-        console.log(result);
-        return true;
+
+const action_enum = {
+    add_request: 'add_request',
+    cancel_request: 'cancel_request',
+    accept_request: 'accept_request',
+    reject_request: 'reject_request',
+    remove_friend: 'remove_friend',
+};
+
+export async function do_action(id, element) {
+    let did_action = false;
+    let response = {};
+    if (element.dataset.action === action_enum.add_request) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'POST', {
+            action: 'add_buddy',
+        });
     }
-    return false;
+    if (element.dataset.action === action_enum.cancel_request) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'DELETE', {
+            action: 'cancel_request',
+        });
+    }
+    if (element.dataset.action === action_enum.remove_friend) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'DELETE', {
+            action: 'remove_friend',
+        });
+    }
+    if (element.dataset.action === action_enum.accept_request) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'POST', {
+            action: 'accept_friend',
+        });
+    }
+    if (element.dataset.action === action_enum.reject_request) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'DELETE', {
+            action: 'reject_friend',
+        });
+    }
+    if (
+        [
+            action_enum.add_request,
+            action_enum.cancel_request,
+            action_enum.accept_request,
+            action_enum.reject_request,
+            action_enum.remove_friend,
+        ].includes(element.dataset.action)
+    ) {
+        if (response.ok) {
+            const id = response.user;
+            const html = await generate_friendship_controls({ id });
+            if (html) {
+                const controls = document.querySelector(`.controls[data-controls-id="${id}"]`);
+                controls.innerHTML = html;
+            }
+            did_action = true;
+        }
+    }
+    return did_action;
 }
 
 // demo of uhtml templates

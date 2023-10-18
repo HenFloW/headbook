@@ -17,11 +17,13 @@ from flask import (
 )
 from urllib.parse import urlparse
 from werkzeug.datastructures import WWWAuthenticate
-from werkzeug.security import generate_password_hash, check_password_hash
 from base64 import b64decode
 from box import Box
 from .login_form import LoginForm
 from .profile_form import ProfileForm
+from .signup_form import SignupForm
+from .utils import hash_password, check_password
+
 db = None
 
 ################################
@@ -91,11 +93,11 @@ class User(flask_login.UserMixin, Box):
         )
         if "id" in self:
             sql_execute(
-                f"UPDATE users SET username='{self.username}', password='{self.password}', info='{info}' WHERE id={self.id};"
+                f"UPDATE users SET username=?, password=?, info=? WHERE id=?;", self.username, self.password, info, self.id
             )
         else:
             sql_execute(
-                f"INSERT INTO users (username, password, info) VALUES ('{self.username}', '{self.password}', '{info}');"
+                f"INSERT INTO users (username, password, info) VALUES (?,?,?);", self.username, self.password, info
             )
             self.id = db.last_insert_rowid()
 
@@ -117,6 +119,45 @@ class User(flask_login.UserMixin, Box):
         return sql_execute(
             f"SELECT token, name FROM tokens WHERE user_id = {self.id}"
         ).fetchall()
+
+    def add_buddy(self, buddy):
+        """Add a buddy to a user's buddy list"""
+        return sql_execute(
+            f"INSERT INTO buddies (user1_id, user2_id) VALUES (?, ?)", self.id, buddy.id
+        )
+    
+    def delete_buddy(self, buddy):
+        """Delete a buddy from a user's buddy list"""
+        sql_execute(
+            f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
+        )
+        sql_execute(
+            f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
+        )
+    
+    def friend_status(self, buddy):
+        """Check if a user is a buddy of another user"""
+
+        added = sql_execute(
+            f"SELECT * FROM buddies WHERE user1_id = {self.id} AND user2_id = {buddy.id}"
+        ).fetchone() != None
+
+        received = sql_execute(
+            f"SELECT * FROM buddies WHERE user1_id = {buddy.id} AND user2_id = {self.id}"
+        ).fetchone() != None
+
+        if(added and received):
+            return "friends"
+        elif(added):
+            return "pending"
+        elif(received):
+            return "requested"
+        elif(self.id == buddy.id):
+            return "self"
+        else:
+            return "none"
+
+
 
     @staticmethod
     def get_token_user(token):
@@ -214,7 +255,6 @@ def request_loader(request):
 @login_required
 def index_html():
     """Render the home page"""
-
     return render_template("home.html")
 
 
@@ -244,7 +284,7 @@ def serve_static(filename, ext):
 def login():
     """Render (GET) or process (POST) login form"""
 
-    debug('/login/ – session:', session, request.host_url)
+    debug('/login/ - session:', session, request.host_url)
     form = LoginForm()
 
     if not form.next.data:
@@ -258,13 +298,15 @@ def login():
             username = form.username.data
             password = form.password.data
             user = user_loader(username)
-            if user and user.password == password:
+            if user and check_password(user.password, password):
                 # automatically sets logged in session cookie
                 login_user(user)
 
                 flask.flash(f"User {user.username} Logged in successfully.")
 
                 return safe_redirect_next()
+            else:
+                form.password.errors.append("Invalid username or password")
     return render_template("login.html", form=form)
 
 @app.get('/logout/')
@@ -286,11 +328,11 @@ def my_profile():
         )
         if form.validate():
             if form.password.data: # change password if user set it
-                current_user.password = form.password.data
+                current_user.password = hash_password(form.password.data)
             if form.birthdate.data: # change birthday if set
                 current_user.birthdate = form.birthdate.data.isoformat()
             # TODO: do we need additional validation for these?
-            current_user.color = form.color.data
+            current_user.color = serializeInput(form.color.data)
             current_user.picture_url = form.picture_url.data
             current_user.about = form.about.data
             current_user.save()
@@ -335,14 +377,32 @@ def get_user(userid):
     else:
         u = User.get_user(userid)
 
+    status = current_user.friend_status(u)
+    print(status, u)
+    if status != "friends" and status != "requested" and status != "self":
+        u = {
+            "id": u.id,
+            "username": u.username,
+            "friend status": status,
+        }
+    else:
+        u = u.to_dict()
+        if status == "self":
+            u[""] = "Your profile"
+
     if u:
-        del u["password"] # hide the password, just in case
+        try:
+            del u["password"] # hide the password, just in case
+        except KeyError:
+            pass
         if prefers_json():
             return jsonify(u)
         else:
             return render_template("users.html", users=[u])
     else:
         abort(404)
+
+
 
 @app.before_request
 def before_request():
@@ -380,6 +440,82 @@ def nocoffee():
 def gotcoffee():
     return "Thanks!"
 
+@app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
+@login_required
+def buddies(userid):
+    user = User.get_user(userid)
+    del user["password"]
+
+    if (request.method == "GET"):
+        status = current_user.friend_status(user)
+        return jsonify({
+            "ok": True,
+            "status": status,
+        })
+    
+    action = request.headers.get("action")
+    
+    if (not action):
+        return jsonify({
+            "ok": False,
+            "error": "No action specified",
+        })
+
+    if not user:
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Invalid user",
+            }
+        )
+    if request.method == "POST":
+        current_user.add_buddy(user)
+        return jsonify({
+            "ok": True,
+            "action": action,
+            "user": user.id,
+        })
+    elif request.method == "DELETE":
+        current_user.delete_buddy(user)
+        return  jsonify({
+            "ok": True,
+            "action": action,
+            "user": user.id,
+        })
+ 
+    return jsonify(
+        {
+            "ok": False,
+            "error": "Invalid method",
+        }
+    )
+
+@app.route("/signup/", methods=["GET", "POST"])
+def signup():
+    """Render (GET) or process (POST) signup form"""
+
+    form = SignupForm()
+
+    if form.is_submitted():
+        debug(
+            f'Received form:\n    {form.data}\n    {f"INVALID: {form.errors}" if not form.validate() else "ok"}'
+        )
+       
+        if form.validate():
+            form.errors.clear()
+            username = form.username.data
+            password = form.password.data
+            
+            if User.get_user(username):
+                form.username.errors.append("Username already taken")
+            if form.errors:
+                return render_template("signup.html", form=form)
+            else:
+                user = User({"username": username, "password": hash_password(password)})
+                user.save()
+                login_user(user)
+                return safe_redirect_next()
+    return render_template("signup.html", form=form)
 
 ################################
 # For database access
