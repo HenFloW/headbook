@@ -28,6 +28,15 @@ db = None
 # Set up app
 APP_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+def serializeInput(inputStr):
+    if(inputStr == None):
+        return ""
+    
+    string = inputStr.replace(">", "&gt;").replace("<", "&lt;")
+    
+    print("Hello")
+    return string
+
 app = Flask(
     __name__,
     template_folder=os.path.join(APP_PATH, "templates/"),
@@ -119,10 +128,10 @@ class User(flask_login.UserMixin, Box):
     @staticmethod
     def get_user(userid):
         if type(userid) == int or userid.isnumeric():
-            sql = f"SELECT id, username, password, info FROM users WHERE id = {userid};"
+            sql = f"SELECT id, username, password, info FROM users WHERE id = ?;"
         else:
-            sql = f"SELECT id, username, password, info FROM users WHERE username = '{userid}';"
-        row = sql_execute(sql).fetchone()
+            sql = f"SELECT id, username, password, info FROM users WHERE username = ?;"
+        row = sql_execute(sql, userid).fetchone()
         if row:
             user = User(json.loads(row[3]))
             user.update({"id": row[0], "username": row[1], "password": row[2]})
@@ -295,7 +304,7 @@ def my_profile():
         form.birthdate.data = current_user.get("birthdate") and date.fromisoformat(
             current_user.get("birthdate")
         )
-        form.color.data = current_user.get("color", "")
+        form.color.data = serializeInput(current_user.get("color", ""))
         form.picture_url.data = current_user.get("picture_url", "")
         form.about.data = current_user.get("about", "")
 
@@ -392,7 +401,8 @@ def teardown_db(exception):
 
 def sql_execute(stmt, *args, **kwargs):
     debug(stmt, args or "", kwargs or "")
-    return get_cursor().execute(stmt, *args, **kwargs)
+   
+    return get_cursor().execute(stmt, (*args, ), **kwargs)
 
 
 def sql_init():
@@ -420,6 +430,7 @@ def sql_init():
             PRIMARY KEY (user1_id, user2_id)
             );"""
         )
+
         alice = User(
             {
                 "username": "alice",
