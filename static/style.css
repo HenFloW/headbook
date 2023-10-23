@@ -139,8 +139,8 @@ form.login label {
     margin: 0.5rem;
 }
 
-form.signup input,
-form.login input {
+input,
+textarea {
     margin: 0.5rem;
     background-color: white;
     border: 1px solid #aaa;
@@ -148,8 +148,8 @@ form.login input {
     padding: 0.5rem;
 }
 
-form.signup .error,
-form.login .error {
+form .error,
+.error {
     color: #a00;
     font-size: 12px;
     word-wrap: break-word;
@@ -203,9 +203,14 @@ button[data-action='cancel_request'] {
     --button-hover-color: rgb(170, 170, 170);
 }
 
-button[data-action='reject_request'],
-button[data-action='remove_friend'] {
+button[data-action='reject_request'] {
     --button-color: rgb(220, 105, 105);
     --button-text: #fff;
     --button-hover-color: rgb(189, 59, 59);
+}
+
+button[data-action='remove_friend'] {
+    --button-color: #eee;
+    --button-text: #333;
+    --button-hover-color: #bbb;
 }

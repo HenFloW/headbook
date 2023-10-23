@@ -440,11 +440,39 @@ def nocoffee():
 def gotcoffee():
     return "Thanks!"
 
+
+@app.get("/buddies/")
+@login_required
+def get_buddies():
+    users = sql_execute(
+        "SELECT id, username FROM users WHERE id IN (SELECT user2_id FROM buddies WHERE user1_id = ?);", current_user.id
+    ).fetchall()
+    
+    response = []
+    
+    for user in users:
+        response.append({"id": user[0], "username": user[1], "friendship": current_user.friend_status(User.get_user(user[0]))})
+    
+    if prefers_json():
+        return jsonify(response)
+    else:
+        return render_template("buddies.html", users=response)
+
 @app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
 @login_required
-def buddies(userid):
+def get_buddie(userid):
     user = User.get_user(userid)
-    del user["password"]
+    
+    if (not user):
+        return jsonify({
+                "ok": False,
+                "error": "Invalid user",
+            })
+    
+    try:
+        del user["password"]
+    except KeyError:
+        pass
 
     if (request.method == "GET"):
         status = current_user.friend_status(user)
@@ -461,13 +489,6 @@ def buddies(userid):
             "error": "No action specified",
         })
 
-    if not user:
-        return jsonify(
-            {
-                "ok": False,
-                "error": "Invalid user",
-            }
-        )
     if request.method == "POST":
         current_user.add_buddy(user)
         return jsonify({
@@ -493,7 +514,6 @@ def buddies(userid):
 @app.route("/signup/", methods=["GET", "POST"])
 def signup():
     """Render (GET) or process (POST) signup form"""
-
     form = SignupForm()
 
     if form.is_submitted():
@@ -502,7 +522,6 @@ def signup():
         )
        
         if form.validate():
-            form.errors.clear()
             username = form.username.data
             password = form.password.data
             
