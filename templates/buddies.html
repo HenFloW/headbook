@@ -4,9 +4,9 @@
     {% if key == 'username' %}
     <span class="key">User</span> <span class="value">{{ user[key] }}</span>
     {% endif %} {% if key == 'friendship' and user[key] == 'friends' %}
-    <a href="profile/{{ user['id'] }}">View profile</a>
+    <a href="http://127.0.0.1:5000/users/{{ user['id'] }}">View profile</a>
     {% endif %} {% if key == 'friendship' and user[key] == 'requested' %}
-    <a href="profile/{{ user['id'] }}">View profile</a>
+    <a href="http://127.0.0.1:5000/users/{{ user['id'] }}">View profile</a>
     {% endif %}
 </div>
 {% endfor %} {% endfor %}

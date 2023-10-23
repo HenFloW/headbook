@@ -23,6 +23,7 @@ from .login_form import LoginForm
 from .profile_form import ProfileForm
 from .signup_form import SignupForm
 from .utils import hash_password, check_password
+from authlib.integrations.flask_client import OAuth
 
 db = None
 
@@ -33,10 +34,7 @@ APP_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def serializeInput(inputStr):
     if(inputStr == None):
         return ""
-    
     string = inputStr.replace(">", "&gt;").replace("<", "&lt;")
-    
-    print("Hello")
     return string
 
 app = Flask(
@@ -50,15 +48,17 @@ app = Flask(
 #    app.config.from_pyfile(os.path.join(APP_PATH, 'secrets'))
 
 # The secret key enables storing encrypted session data in a cookie (TODO: make a secure random key for this! and don't store it in Git!)
-app.config["SECRET_KEY"] = "mY s3kritz"
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+
 #app.config["GITLAB_BASE_URL"] = 'https://git.app.uib.no/'
 #app.config["GITLAB_CLIENT_ID"] = ''
 #app.config["GITLAB_CLIENT_SECRET"] = ''
 # Pick appropriate values for these
-#app.config['SESSION_COOKIE_NAME'] = 
-#app.config['SESSION_COOKIE_SAMESITE'] = 
-#app.config['SESSION_COOKIE_SECURE'] = 
+app.config["SESSION_COOKIE_NAME"] = "headbook-session"
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Add a login manager to the app
 import flask_login
@@ -67,6 +67,15 @@ from flask_login import current_user, login_required, login_user
 login_manager = flask_login.LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
+
+oauth = OAuth(app)
+oauth.register(
+    name="gitlab",
+    client_id=os.getenv("GITLAB_CLIENT_ID"),
+    client_secret=os.getenv("GITLAB_CLIENT_SECRET"),
+    server_metadata_url='https://git.app.uib.no/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid profile email api read_api'},
+)
 
 ################################
 
@@ -139,21 +148,21 @@ class User(flask_login.UserMixin, Box):
         """Check if a user is a buddy of another user"""
 
         added = sql_execute(
-            f"SELECT * FROM buddies WHERE user1_id = {self.id} AND user2_id = {buddy.id}"
+            f"SELECT * FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
         ).fetchone() != None
 
         received = sql_execute(
-            f"SELECT * FROM buddies WHERE user1_id = {buddy.id} AND user2_id = {self.id}"
+            f"SELECT * FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
         ).fetchone() != None
 
         if(added and received):
             return "friends"
+        elif(self.id == buddy.id):
+            return "self"
         elif(added):
             return "pending"
         elif(received):
             return "requested"
-        elif(self.id == buddy.id):
-            return "self"
         else:
             return "none"
 
@@ -309,6 +318,38 @@ def login():
                 form.password.errors.append("Invalid username or password")
     return render_template("login.html", form=form)
 
+@app.route('/auth/callback/gitlab')
+def auth_callback():
+    token = oauth.gitlab.authorize_access_token()
+   
+    userinfo = token["userinfo"]
+
+    user = User.get_user(userinfo["preferred_username"])
+
+    if user:
+        print("user exists")
+        login_user(user)
+    else:
+
+        newuser = User({
+            "username": userinfo["preferred_username"],
+            "password": hash_password(userinfo["sub"] + app.config["SECRET_KEY"]),
+            "picture_url": userinfo["picture"],
+            "name": userinfo["name"],
+            "email": userinfo["email"],
+        })
+        
+        newuser.save()
+        newuser.add_token("gitlab")
+        login_user(newuser)
+
+    return safe_redirect_next()
+
+@app.route('/login/gitlab/')
+def login_gitlab():   
+    return oauth.gitlab.authorize_redirect(url_for('auth_callback', _external=True))
+    
+
 @app.get('/logout/')
 def logout_gitlab():
     print('logout', session, session.get('access_token'))
@@ -378,7 +419,7 @@ def get_user(userid):
         u = User.get_user(userid)
 
     status = current_user.friend_status(u)
-    print(status, u)
+   
     if status != "friends" and status != "requested" and status != "self":
         u = {
             "id": u.id,
@@ -387,8 +428,10 @@ def get_user(userid):
         }
     else:
         u = u.to_dict()
+        u["friend status"] = status
         if status == "self":
             u[""] = "Your profile"
+            del u["friend status"]
 
     if u:
         try:
@@ -412,7 +455,12 @@ def before_request():
 # Can be used to set HTTP headers on the responses
 @app.after_request
 def after_request(response):
-    # response.headers["Content-Security-Policy"] = 
+    csp = {
+        "script-src": ["'self'", f"'nonce-{g.csp_nonce}'"],
+    }
+    response.headers["Content-Security-Policy"] = "; ".join(
+        [f"{k} {' '.join(v)}" for k, v in csp.items()]
+    )
     return response
 
 def get_safe_redirect_url():
@@ -468,11 +516,6 @@ def get_buddie(userid):
                 "ok": False,
                 "error": "Invalid user",
             })
-    
-    try:
-        del user["password"]
-    except KeyError:
-        pass
 
     if (request.method == "GET"):
         status = current_user.friend_status(user)

@@ -5,7 +5,9 @@ HeadBook{% endblock %} {% block header %}{% endblock %} {% block content %}
     <dl>
         {{ form.csrf_token }} {{ render_field(form.username) }} {{ render_field(form.password) }}
     </dl>
-    <p> {{ form.login }} {{ form.next }} </p><a href="/signup">Dont have an account?</a></form
+    <p> {{ form.login }} {{ form.next }} </p
+    ><a href="/login/gitlab" style="margin-block: 10px">Login with Gitlab</a
+    ><a href="/signup">Dont have an account?</a></form
 >
 
 {% endblock %}

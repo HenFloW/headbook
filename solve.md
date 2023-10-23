@@ -117,7 +117,19 @@ elt.innerHTML = `
         <div class="controls">
 ```
 
-to prevent this i made a function that sanitizes an input
+you can prevent this by using Content Security Policy (CSP) to prevent the browser from executing any inline javascript, you can do this by adding a this in the after request
+
+```py
+@app.after_request
+def after_request(response):
+    response.headers["Content-Security-Policy"] = f"script-src 'nonce-{g.csp_nonce}' http://127.0.0.1:5000/script.js http://127.0.0.1:5000/uhtml.js;"
+    return response
+```
+
+this will also prevent any inline javascript if you inspect element and add button with onclick from running. The same will happen if a userinput is not sanitized and displayed on the website.
+This lets the app work as normal but it will not execute any inline javascript.
+
+Another method to prevent this is to sanitize html where users can change the value. I made a function that sanitizes an input
 
 ```js
 export const sanitizeInput = (input) => {
@@ -247,11 +259,137 @@ and in the login i added check_password to check if the password is correct
         login_user(user)
 ```
 
+With the buddy system i made the format_profile async so could fetch the buddy status and then i added a check for if the user is friends or requested and if not i added a message that you need to be friends to see more this makes it so before the server gives any information about the user it checks if you are friends with the user
+
+```js
+export async function format_profile(user, elt) {
+    if (!elt) elt = document.createElement('div');
+    elt.classList.add('user'); // set CSS class
+    if (user.id == current_user_id) {
+        // current_user_id is a global variable (set on 'window')
+        elt.classList.add('me');
+    }
+
+    const buddy = await fetch_json(`/buddies/${user.id}`, 'GET');
+
+    let more = '';
+
+    if (buddy.status != 'friends' && buddy.status != 'requested' && user.id != current_user_id) {
+        more = '<i>Become friends to see more</i>';
+    } else {
+        more = `
+            ${format_field('Birth date', '?0', {}, user.birthdate)}
+            ${format_field(
+                'Favourite colour',
+                `?0<div class="color-sample" style="background:?0"></div>`,
+                {},
+                user.color,
+            )}
+            ${format_field('About', '<i>?0</i>', 'long', user.about)}
+        `;
+    }
+    // ..... rest of the code
+}
+```
+
+i also changes some routes so you could not bypass the buddy system in users/&lt;userid&gt;
+
+```py
+@app.get("/users/<userid>")
+@login_required
+def get_user(userid):
+if userid == 'me':
+    u = current_user
+else:
+    u = User.get_user(userid)
+
+status = current_user.friend_status(u)
+
+if status != "friends" and status != "requested" and status != "self":
+    u = {
+        "id": u.id,
+        "username": u.username,
+        "friend status": status,
+    }
+else:
+    u = u.to_dict()
+    u["friend status"] = status
+    if status == "self":
+        u[""] = "Your profile"
+        del u["friend status"]
+
+# ... rest
+```
+
+to make the buddy system work i added a route for getting the buddy status, post status and delete status
+
+```py
+@app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
+@login_required
+def get_buddie(userid):
+    user = User.get_user(userid)
+
+    if (not user):
+        return jsonify({
+                "ok": False,
+                "error": "Invalid user",
+            })
+
+    if (request.method == "GET"):
+        status = current_user.friend_status(user)
+        return jsonify({
+            "ok": True,
+            "status": status,
+        })
+
+    action = request.headers.get("action")
+
+    if (not action):
+        return jsonify({
+            "ok": False,
+            "error": "No action specified",
+        })
+
+    if request.method == "POST":
+        current_user.add_buddy(user)
+        return jsonify({
+            "ok": True,
+            "action": action,
+            "user": user.id,
+        })
+    elif request.method == "DELETE":
+        current_user.delete_buddy(user)
+        return  jsonify({
+            "ok": True,
+            "action": action,
+            "user": user.id,
+        })
+```
+
+and to the user i added a function to add and delete buddies
+
+```py
+def add_buddy(self, buddy):
+    """Add a buddy to a user's buddy list"""
+    return sql_execute(
+        f"INSERT INTO buddies (user1_id, user2_id) VALUES (?, ?)", self.id, buddy.id
+    )
+
+def delete_buddy(self, buddy):
+    """Delete a buddy from a user's buddy list"""
+    sql_execute(
+        f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
+    )
+    sql_execute(
+        f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
+    )
+```
+
 ## 2d
 
 ### Other vounrabilities i have found in this app:
 
-**you can do an sql injection in the update password in profile**
+**you can do an sql injection in the in edit profile**
 
 if you repeat the same password with this string you will update all the users password to the same password because i set the password where 1=1 which is always true and then all the passwords will be set to hacked
 
@@ -260,9 +398,7 @@ x' WHERE 'x'='y'; UPDATE users SET password='hacked_password' WHERE 1=1;--
 ```
 
 and you can do the same in the fields about and color in profile to do the same sql injection
-
 you cannot do it in picture_url or birthdate because the html input type is date and url and it will not accept any other input
-
 so this can be fixed by using prepared statement like i did in the first sql injection
 
 ```py
@@ -282,8 +418,84 @@ so this can be fixed by using prepared statement like i did in the first sql inj
             self.id = db.last_insert_rowid()
 ```
 
+The app secret is not secure because its in the app.py and the value is a short string and a common string, this can be fixed by using a longer and more random string and put it in a .env file
+i did this by adding a .env file and adding a random string MY_SECRET, and the loading it in the app.py, here i used another library called python-dotenv to load the .env file
+
+```py
+app.config["SECRET_KEY"] = os.getenv("MY_SECRET")
+```
+
+i also changed how Flask will store the session cookie, i changed it from the default to secure, this will make sure that the cookie is only sent over https and not http, i did this by adding this to the app.py
+
+```py
+app.config["SESSION_COOKIE_NAME"] = "headbook-session"
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+```
+
+this will make sure that the cookie is only sent over https and not http, and it will also make sure that the cookie is not accessible by javascript and it will also make sure that the cookie is not sent to other sites
+
+As i did in 2b i added Content Security Policy (CSP) to prevent the browser from executing any inline javascript, this will make it harder to inject javascript into the app.
+
 ### Other additions i have made to the app:
 
 **i added a new page where you can sign up**
 
 route: [/signup](http://127.0.0.1:5000/signup/)
+
+## 2e
+
+#### implementing openID connect
+
+for this i used flask's authlib.integrations.flask_client
+first i setup the OAuth with the provider
+
+```py
+oauth = OAuth(app)
+oauth.register(
+    name="gitlab",
+    client_id=os.getenv("GITLAB_CLIENT_ID"),
+    client_secret=os.getenv("GITLAB_CLIENT_SECRET"),
+    server_metadata_url='https://git.app.uib.no/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid profile email api read_api'},
+)
+```
+
+then i added the new route for the login with gitlab and the callback
+
+```py
+@app.route('/auth/callback/gitlab')
+def auth_callback():
+    token = oauth.gitlab.authorize_access_token()
+    userinfo = token["userinfo"]
+    user = User.get_user(userinfo["preferred_username"])
+
+    if user:
+        login_user(user)
+    else:
+
+        newuser = User({
+            "username": userinfo["preferred_username"],
+            "password": hash_password(userinfo["sub"] + app.config["SECRET_KEY"]),
+            "picture_url": userinfo["picture"],
+            "name": userinfo["name"],
+            "email": userinfo["email"],
+        })
+
+        newuser.save()
+        newuser.add_token("gitlab")
+        login_user(newuser)
+
+    return safe_redirect_next()
+
+@app.route('/login/gitlab/')
+def login_gitlab():
+    return oauth.gitlab.authorize_redirect(url_for('auth_callback', _external=True))
+```
+
+and then i added an apllication in gitlab and added the client id and client secret to the .env file
+
+![Gitlab application](anwser/images/gitlab.png)
+
+with this i could login using a gitlab account
