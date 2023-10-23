@@ -2,7 +2,7 @@ _Henrik Flo Wilhelmsen (hwi038)_
 
 ## 2a
 
-to be able to inject sql into the database we can put spesific textinput into the about field to escape the original sql, for example
+To be able to inject sql into the database we can put spesific textinput into the input field to escape the original sql, for example
 
 ```sql
 x'; INSERT into users (username, password, info) VALUES ('xxx', 'ppp', '{}'); --
@@ -13,6 +13,20 @@ x'; UPDATE users SET password = 'hacked' WHERE id = 3 OR 1=1; --
 ```
 
 this will escape the original sql and then you can add your own sql, this happens because the input is directly passed into the sql string and can change the structure of the sql query
+
+```py
+@staticmethod
+    def get_user(userid):
+        if type(userid) == int or userid.isnumeric():
+            sql = f"SELECT id, username, password, info FROM users WHERE id = {userid};"
+        else:
+            sql = f"SELECT id, username, password, info FROM users WHERE username = '{userid}';"
+        row = sql_execute(sql).fetchone()
+        if row:
+            user = User(json.loads(row[3]))
+            user.update({"id": row[0], "username": row[1], "password": row[2]})
+            return user
+```
 
 to prevent this i will used prepared statement when i query the database with userinput, this will make sure that the input is not directly passed into the sql string and the structure will be the same
 
@@ -85,7 +99,7 @@ onerror="
 <div style="
 ```
 
-you can use a button with onlick to trigger the alert but with this method you can trigger the alert without clicking anything only rendering the img tag, in the color i can escape the html like we did in the sql injection and then i can put the img tag inside the div tag
+you can use a button with onlick to trigger the alert but with onerror and a image that will always get error this method you can trigger the alert without clicking anything only rendering the img tag, in the color i can escape the html like we did in the sql injection and then i can put the img tag inside the div tag
 
 this will inject javascript because the about input is directly passed to the innerHtml without any sanitization
 
@@ -133,7 +147,7 @@ export function format_field(key, value, options = {}, ...other) {
         const index = parseInt(match[1]);
         value = value.replace(match[0]?.toString(), sanitizeInput(other[index]?.toString()));
     }
-    // .....
+    // ..... rest of the code
     return `<li class="${classNames}"><span class="key">${key}</span>${value}</li>`;
 }
 ```
