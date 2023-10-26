@@ -241,6 +241,7 @@ def request_loader(request):
 
 
 @app.get("/current_user_id")
+@login_required
 def get_current_user_id():
     return jsonify(current_user.id)
 
