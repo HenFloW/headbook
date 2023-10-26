@@ -119,10 +119,10 @@ class User(flask_login.UserMixin, Box):
     @staticmethod
     def get_user(userid):
         if type(userid) == int or userid.isnumeric():
-            sql = f"SELECT id, username, password, info FROM users WHERE id = {userid};"
+            sql = f"SELECT id, username, password, info FROM users WHERE id = ?;"
         else:
-            sql = f"SELECT id, username, password, info FROM users WHERE username = '{userid}';"
-        row = sql_execute(sql).fetchone()
+            sql = f"SELECT id, username, password, info FROM users WHERE username = ?;"
+        row = sql_execute(sql, userid).fetchone()
         if row:
             user = User(json.loads(row[3]))
             user.update({"id": row[0], "username": row[1], "password": row[2]})
@@ -392,7 +392,7 @@ def teardown_db(exception):
 
 def sql_execute(stmt, *args, **kwargs):
     debug(stmt, args or "", kwargs or "")
-    return get_cursor().execute(stmt, *args, **kwargs)
+    return get_cursor().execute(stmt, (*args,), **kwargs)
 
 
 def sql_init():
