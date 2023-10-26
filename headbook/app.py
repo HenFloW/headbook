@@ -428,6 +428,28 @@ def get_user(userid):
     else:
         abort(404)
 
+@app.get("/buddies/")
+@login_required
+def get_buddies():
+    users = sql_execute(
+        "SELECT id, username, info FROM users WHERE id IN (SELECT user1_id FROM buddies WHERE user2_id = ?);", current_user.id
+    ).fetchall()
+
+    pending = sql_execute(
+        "SELECT id, username, info FROM users WHERE id IN (SELECT user2_id FROM buddies WHERE user1_id = ? AND user2_id NOT IN (SELECT user1_id FROM buddies WHERE user2_id = ?));", current_user.id, current_user.id
+    ).fetchall()
+    
+    response = []
+    users.extend(pending)
+
+    for user in users:
+        response.append({"id": user[0], "username": user[1], "friendship": current_user.friend_status(User.get_user(user[0])), "info": json.loads(user[2])})
+
+    if prefers_json():
+        return jsonify(response)
+    else:
+        return render_template("buddies.html", users=response)
+
 @app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
 @login_required
 def get_buddie(userid):
