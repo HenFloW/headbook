@@ -21,6 +21,7 @@ from base64 import b64decode
 from box import Box
 from .login_form import LoginForm
 from .profile_form import ProfileForm
+from .signup_form import SignupForm
 from .utils import check_password, hash_password
 db = None
 
@@ -266,6 +267,35 @@ def logout_gitlab():
     print('logout', session, session.get('access_token'))
     flask_login.logout_user()
     return redirect('/')
+
+
+@app.route("/signup/", methods=["GET", "POST"])
+def signup():
+    """Render (GET) or process (POST) signup form"""
+
+    debug('/signup/ – session:', session, request.host_url)
+    form = SignupForm()
+
+    if not form.next.data:
+        form.next.data = flask.request.args.get("next")
+    
+    if form.is_submitted():
+        debug(
+            f'Received form:\n    {form.data}\n{"INVALID" if not form.validate() else "valid"} {form.errors}'
+        )
+        if form.validate():
+            username = form.username.data
+            password = form.password.data
+            user = User.get_user(username)
+            if user:
+                flask.flash(f"User {username} already exists.")
+            else:
+                user = User({"username": username, "password": password})
+                user.save()
+                login_user(user)
+                flask.flash(f"User {username} created successfully.")
+                return safe_redirect_next()
+    return render_template("signup.html", form=form)
 
 @app.route("/profile/", methods=["GET", "POST", "PUT"])
 @login_required

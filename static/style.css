@@ -1,5 +1,6 @@
 * {
     box-sizing: border-box;
+    font-family: sans-serif;
 }
 
 #page {
@@ -103,4 +104,79 @@ form .error {
     width: 1.2em;
     height: 1.2em;
     vertical-align: middle;
+}
+
+form.signup,
+form.login {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    background-color: #eee;
+    width: max-content;
+    border-radius: 0.5rem;
+    height: auto;
+    padding: 1rem;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.signup .form-field,
+.login .form-field {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    max-width: 250px;
+}
+
+form.signup label,
+form.login label {
+    text-align: left;
+    margin: 0.5rem;
+}
+
+input,
+textarea {
+    margin: 0.5rem;
+    background-color: white;
+    border: 1px solid #aaa;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+}
+
+form .error,
+.error {
+    color: #a00;
+    font-size: 12px;
+    word-wrap: break-word;
+    padding: 2px;
+    border-radius: 0.25rem;
+    text-align: center;
+    width: 100%;
+    margin-block: 2px;
+}
+
+form > h1 {
+    font-size: large;
+    font-weight: bold;
+}
+
+button {
+    --button-color: #eee;
+    --button-text: #333;
+    --button-hover-color: #ddd;
+
+    background-color: var(--button-color);
+    color: var(--button-text);
+    border: 1px solid #eee;
+    border-radius: 0.5rem;
+    padding: 0.5em;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease-in-out, filter 0.3s ease-in-out, scale 0.3s ease-in-out;
+    box-shadow: 1px 1px 5px 0 rgba(0, 0, 0, 0.1);
 }
