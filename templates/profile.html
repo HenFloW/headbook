@@ -1,22 +1,38 @@
-{% extends "_layout.html" %}
-{% from "_field.html" import render_field %}
-{% block title %}Edit profile{% endblock %}
-{% block content %}
-        <form class="user" novalidate action="" method="post">
-                {{ form.csrf_token }}
+{% extends "_layout.html" %} {% from "_field.html" import render_field %} {% block title %}Edit
+profile{% endblock %} {% block head %} {{ super() }}
+<script nonce="{{g.csp_nonce}}">
+    // This will make sure that we cant inject any html or javascript into the color input field
+    // before we added the color field directly inside a the render field  html
+    // we could inject html and javascript into the color field
+    // now we only set the background color of the color sample div
+    // and we have a small event listener that updates the background color of the color sample div on input: for fun
+    document.addEventListener(
+        'DOMContentLoaded',
+        function () {
+            color_sample = document.querySelector('#color-sample');
+            colorinput = document.querySelector('#color');
+            color_sample.style.backgroundColor = colorinput.value;
+            colorinput.addEventListener(
+                'input',
+                function (e) {
+                    color_sample.style.backgroundColor = e.target.value;
+                },
+                false,
+            );
+        },
+        false,
+    );
+</script>
+{% endblock %} {% block content %}
+<form class="user" novalidate action="" method="post">
+    {{ form.csrf_token }} {{ render_field(form.username) }} {{ render_field(form.password,
+    autocomplete="new-password") }} {{ render_field(form.password_again,
+    autocomplete="new-password") }} {{ render_field(form.birthdate) }} {{ render_field(form.color,
+    '<div id="color-sample" class="color-sample" />') }} {{ render_field(form.picture_url) }} {% if
+    form.picture_url.data %}
+    <img src="{{form.picture_url.data|safe}}" alt="{{form.username.data}}'s profile picture" />
+    {% endif %} {{ render_field(form.about) }}
+    <p> {{ form.save }} </p></form
+>
 
-                {{ render_field(form.username) }}
-                {{ render_field(form.password, autocomplete="new-password") }}
-                {{ render_field(form.password_again, autocomplete="new-password") }}
-                {{ render_field(form.birthdate) }}
-                {{ render_field(form.color, '<div class="color-sample" style="background-color:' + form.color.data + '"></div>') }}
-                 
-                {{ render_field(form.picture_url) }}
-                {% if form.picture_url.data %}
-                    <img src="{{form.picture_url.data|safe}}" alt="{{form.username.data}}'s profile picture">
-                {% endif %}
-                {{ render_field(form.about) }}
-            <p>
-            {{ form.save }}
-        </form>
 {% endblock %}
