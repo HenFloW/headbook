@@ -15,9 +15,9 @@ users %}
             >{{ user["username"] }}
             <span
                 >{% if user["friendship"] == 'friends' %}
-                <a href="http://127.0.0.1:5000/users/{{ user['id'] }}">View profile</a>
+                <a href="/users/{{ user['id'] }}">View profile</a>
                 {% endif %} {% if user["friendship"] == 'requested' %}
-                <a href="http://127.0.0.1:5000/users/{{ user['id'] }}">View profile</a>
+                <a href="/users/{{ user['id'] }}">View profile</a>
                 {% endif %}
             </span></h1
         >
