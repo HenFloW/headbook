@@ -180,3 +180,37 @@ button {
     transition: background-color 0.2s ease-in-out, filter 0.3s ease-in-out, scale 0.3s ease-in-out;
     box-shadow: 1px 1px 5px 0 rgba(0, 0, 0, 0.1);
 }
+
+button:hover {
+    background-color: var(--button-hover-color);
+}
+
+button:active {
+    filter: brightness(0.9);
+    scale: 0.95;
+}
+
+button[data-action='add_request'],
+button[data-action='accept_request'] {
+    --button-color: rgb(61, 122, 169);
+    --button-text: #fff;
+    --button-hover-color: rgb(58, 107, 147);
+}
+
+button[data-action='cancel_request'] {
+    --button-color: rgb(200, 200, 200);
+    --button-text: #fff;
+    --button-hover-color: rgb(170, 170, 170);
+}
+
+button[data-action='reject_request'] {
+    --button-color: rgb(220, 105, 105);
+    --button-text: #fff;
+    --button-hover-color: rgb(189, 59, 59);
+}
+
+button[data-action='remove_friend'] {
+    --button-color: #eee;
+    --button-text: #333;
+    --button-hover-color: #bbb;
+}

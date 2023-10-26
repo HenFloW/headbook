@@ -73,7 +73,7 @@ export function format_field(key, value, options = {}) {
  * @param {*} elt An optional element to render the user into
  * @returns elt or a new element
  */
-export function format_profile(user, elt) {
+export async function format_profile(user, elt) {
     if (!elt) elt = document.createElement('div');
     elt.classList.add('user'); // set CSS class
     if (user.id == current_user_id) {
@@ -99,17 +99,64 @@ export function format_profile(user, elt) {
                     ${format_field('About', user.about, 'long')}
                 </div>
             </div>
-            <div class="controls">
-                ${window.current_user_id == user.id
-                    ? ''
-                    : html`<button type="button" data-user-id="${user.id}" data-action="add_buddy"
-                          >Add buddy</button
-                      >`}
+            <div class="controls" data-controls-id="${user.id}">
+                ${await generate_friendship_controls(user)}
             </div>
         `,
     );
     return elt;
 }
+
+const action_enum = {
+    add_request: 'add_request',
+    cancel_request: 'cancel_request',
+    accept_request: 'accept_request',
+    reject_request: 'reject_request',
+    remove_friend: 'remove_friend',
+};
+
+const generate_friendship_controls = async (user) => {
+    if (!user.id) return html``;
+    if (user.id == current_user_id) return html``;
+
+    const response = await fetch_json(`/buddies/${user.id}`, 'GET');
+
+    const friendship_status = response.status;
+
+    if (!friendship_status) return html``;
+
+    if (user.id == window.current_user_id) return html``;
+
+    let text = 'Add as buddy';
+    let action = action_enum.add_request;
+
+    if (friendship_status == 'pending') {
+        text = 'Pending...';
+        action = action_enum.cancel_request;
+    }
+    if (friendship_status == 'friends') {
+        text = 'Remove buddy';
+        action = action_enum.remove_friend;
+    }
+    if (friendship_status == 'requested') {
+        return html`<button
+                type="button"
+                data-user-id="${user.id}"
+                data-action="${action_enum.accept_request}"
+                >Accept</button
+            >
+            <button
+                type="button"
+                data-user-id="${user.id}"
+                data-action="${action_enum.reject_request}"
+                >Reject</button
+            >`;
+    }
+
+    return html`<button type="button" data-user-id="${user.id}" data-action="${action}"
+        >${text}</button
+    >`;
+};
 
 /**
  * Perform an action, such as a button click.
@@ -119,15 +166,42 @@ export function format_profile(user, elt) {
  * @param {*} element A button element with `data-action="…"` set
  * @returns true if action was performed
  */
-export async function do_action(element) {
-    if (element.dataset.action === 'add_buddy') {
-        result = await fetch_json(`/buddies/${element.dataset.userId}`, 'POST');
-        console.log(result);
-        return true;
-    }
-    return false;
-}
+export async function do_action(id, element) {
+    let did_action = false;
+    let response = {};
 
+    if ([action_enum.add_request, action_enum.accept_request].includes(element.dataset.action)) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'POST', {
+            action: element.dataset.action,
+        });
+        did_action = true;
+    }
+
+    if (
+        [
+            action_enum.reject_request,
+            action_enum.cancel_request,
+            action_enum.remove_friend,
+        ].includes(element.dataset.action)
+    ) {
+        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'DELETE', {
+            action: element.dataset.action,
+        });
+        did_action = true;
+    }
+
+    if (did_action) {
+        if (response.ok) {
+            const id = response.user;
+            const button = await generate_friendship_controls({ id });
+            const controls = document.querySelector(`.controls[data-controls-id="${id}"]`);
+            if (button && controls) {
+                render(controls, button);
+            }
+        }
+    }
+    return did_action;
+}
 // demo of uhtml templates
 function uhtml_demo() {
     const main = document.querySelector('main');

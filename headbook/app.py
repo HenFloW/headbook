@@ -111,6 +111,44 @@ class User(flask_login.UserMixin, Box):
             f"SELECT token, name FROM tokens WHERE user_id = {self.id}"
         ).fetchall()
 
+    def add_buddy(self, buddy):
+        """Add a buddy to a user's buddy list"""
+        return sql_execute(
+            f"INSERT INTO buddies (user1_id, user2_id) VALUES (?, ?)", self.id, buddy.id
+        )
+    
+    def delete_buddy(self, buddy):
+        """Delete a buddy from a user's buddy list"""
+        sql_execute(
+            f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
+        )
+        sql_execute(
+            f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
+        )
+    
+    def friend_status(self, buddy):
+        """Check if a user is a buddy of another user"""
+
+        added = sql_execute(
+            f"SELECT * FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
+        ).fetchone() != None
+
+        received = sql_execute(
+            f"SELECT * FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
+        ).fetchone() != None
+
+        
+        if(self.id == buddy.id):
+            return "self"
+        if(added and received):
+            return "friends"
+        if(added):
+            return "pending"
+        if(received):
+            return "requested"
+        
+        return "none"
+
     @staticmethod
     def get_token_user(token):
         """Retrieve the user who owns a particular access token"""
@@ -367,6 +405,63 @@ def get_user(userid):
             return render_template("users.html", users=[u])
     else:
         abort(404)
+
+
+@app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
+@login_required
+def get_buddie(userid):
+    user = User.get_user(userid)
+    
+    if (not user):
+        flask.flash(f"User {userid} does not exist.")
+        return jsonify({
+                "ok": False,
+                "error": "Invalid user",
+            })
+
+    if (request.method == "GET"):
+        status = current_user.friend_status(user)
+        return jsonify({
+            "ok": True,
+            "status": status,
+        })
+    
+    action = request.headers.get("action")
+    
+    if (not action):
+        return jsonify({
+            "ok": False,
+            "error": "No action specified",
+        })
+    
+    if(current_user.id == user.id):
+        flask.flash(f"Cannot add self as buddy.")
+        return jsonify({
+            "ok": False,
+            "error": "Cannot add self as buddy",
+        })
+
+    if request.method == "POST":
+        current_user.add_buddy(user)
+        return jsonify({
+            "ok": True,
+            "action": action,
+            "user": user.id,
+        })
+    elif request.method == "DELETE":
+        current_user.delete_buddy(user)
+        return  jsonify({
+            "ok": True,
+            "action": action,
+            "user": user.id,
+        })
+    
+    return jsonify(
+        {
+            "ok": False,
+            "error": "Invalid method",
+        }
+    )
 
 @app.before_request
 def before_request():
