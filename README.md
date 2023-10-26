@@ -49,3 +49,5 @@ SECRET_KEY=\<your_secret_key\> # Replace with your own secret key and make it lo
 -   `favicon.(png|ico)` – from [Game Icons](https://game-icons.net/1x1/skoll/knockout.html) ([CC BY 3.0](http://creativecommons.org/licenses/by/3.0/))
 -   `uhtml.js` – from [µHTML](https://github.com/WebReflection/uhtml) (Copyright (c) 2020, Andrea Giammarchi, [ISC License](https://opensource.org/license/isc-license-txt/))
 -   Base code by Anya
+
+-   `gitlab svg` - from [Gitlab](https://about.gitlab.com/press/press-kit/)

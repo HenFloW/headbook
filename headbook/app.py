@@ -23,6 +23,7 @@ from .login_form import LoginForm
 from .profile_form import ProfileForm
 from .signup_form import SignupForm
 from .utils import check_password, hash_password
+from authlib.integrations.flask_client import OAuth
 db = None
 
 ################################
@@ -59,6 +60,15 @@ from flask_login import current_user, login_required, login_user
 login_manager = flask_login.LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
+
+oauth = OAuth(app)
+oauth.register(
+    name="gitlab",
+    client_id=os.getenv("GITLAB_CLIENT_ID"),
+    client_secret=os.getenv("GITLAB_CLIENT_SECRET"),
+    server_metadata_url='https://git.app.uib.no/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid profile email api read_api'},
+)
 
 ################################
 
@@ -305,6 +315,38 @@ def login():
                 return safe_redirect_next()
     return render_template("login.html", form=form)
 
+@app.route('/auth/callback/gitlab')
+def auth_callback():
+    token = oauth.gitlab.authorize_access_token()
+   
+    userinfo = token["userinfo"]
+
+    user = User.get_user(userinfo["preferred_username"])
+    print(userinfo)
+    if user:
+        print("user exists")
+        login_user(user)
+    else:
+
+        newuser = User({
+            "username": userinfo["preferred_username"],
+            "password": userinfo["sub_legacy"] + app.config["SECRET_KEY"] + str(secrets.randbits(32)),
+            "picture_url": userinfo["picture"],
+            "name": userinfo["name"],
+            "email": userinfo["email"],
+        })
+        
+        newuser.save()
+        newuser.add_token("gitlab")
+        login_user(newuser)
+
+    return safe_redirect_next()
+
+@app.route('/login/gitlab/')
+def login_gitlab():   
+    print(url_for('auth_callback', _external=True))
+    return oauth.gitlab.authorize_redirect(url_for('auth_callback', _external=True))
+ 
 
 
 @app.get('/logout/')

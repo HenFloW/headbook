@@ -165,8 +165,9 @@ form > h1 {
     font-weight: bold;
 }
 
-button {
-    --button-color: #eee;
+button,
+input[type='submit'] {
+    --button-color: white;
     --button-text: #333;
     --button-hover-color: #ddd;
 
@@ -181,11 +182,13 @@ button {
     box-shadow: 1px 1px 5px 0 rgba(0, 0, 0, 0.1);
 }
 
-button:hover {
+button:hover,
+input[type='submit']:hover {
     background-color: var(--button-hover-color);
 }
 
-button:active {
+button:active,
+input[type='submit']:active {
     filter: brightness(0.9);
     scale: 0.95;
 }
@@ -246,4 +249,33 @@ button[data-action='remove_friend'] {
 
 .buddie-container-info .fstatus {
     font-weight: bold;
+}
+
+.gitlab {
+    text-decoration: none;
+    color: #333;
+    background-color: white;
+    border: 1px solid #aaa;
+    border-radius: 0.5rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding-block: 0.2rem;
+    padding-right: 1.5em;
+    margin-bottom: 1rem;
+}
+
+.gitlab span {
+    margin-left: 0.5rem;
+}
+
+.gitlab span svg {
+    width: 2rem;
+    height: 2rem;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.gitlab:hover {
+    background-color: #ccc;
 }
