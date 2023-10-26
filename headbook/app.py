@@ -17,11 +17,11 @@ from flask import (
 )
 from urllib.parse import urlparse
 from werkzeug.datastructures import WWWAuthenticate
-from werkzeug.security import generate_password_hash, check_password_hash
 from base64 import b64decode
 from box import Box
 from .login_form import LoginForm
 from .profile_form import ProfileForm
+from .utils import check_password, hash_password
 db = None
 
 ################################
@@ -80,13 +80,14 @@ class User(flask_login.UserMixin, Box):
         info = json.dumps(
             {k: self[k] for k in self if k not in ["username", "password", "id"]}
         )
+       
         if "id" in self:
             sql_execute(
                 f"UPDATE users SET username='{self.username}', password='{self.password}', info='{info}' WHERE id={self.id};"
             )
         else:
             sql_execute(
-                f"INSERT INTO users (username, password, info) VALUES ('{self.username}', '{self.password}', '{info}');"
+                f"INSERT INTO users (username, password, info) VALUES ('{self.username}', '{hash_password(self.password)}', '{info}');"
             )
             self.id = db.last_insert_rowid()
 
@@ -249,7 +250,7 @@ def login():
             username = form.username.data
             password = form.password.data
             user = user_loader(username)
-            if user and user.password == password:
+            if user and check_password(user.password, password):
                 # automatically sets logged in session cookie
                 login_user(user)
 
@@ -257,6 +258,8 @@ def login():
 
                 return safe_redirect_next()
     return render_template("login.html", form=form)
+
+
 
 @app.get('/logout/')
 def logout_gitlab():
@@ -277,7 +280,7 @@ def my_profile():
         )
         if form.validate():
             if form.password.data: # change password if user set it
-                current_user.password = form.password.data
+                current_user.password = hash_password(form.password.data)
             if form.birthdate.data: # change birthday if set
                 current_user.birthdate = form.birthdate.data.isoformat()
             # TODO: do we need additional validation for these?
@@ -430,7 +433,10 @@ def sql_init():
         )
         alice.save()
         alice.add_token("example")
-        bob = User({"username": "bob", "password": "bananas", "color": "red"})
+        bob = User({
+            "username": "bob", 
+            "password": "bananas", 
+            "color": "red"})
         bob.save()
         bob.add_token("test")
         sql_execute(
