@@ -31,6 +31,10 @@ flask -A headbook:app run --reload
 
 ```sh
 SECRET_KEY=\<your_secret_key\> # Replace with your own secret key and make it long
+
+# Gitlab OAuth
+GITLAB_CLIENT_ID=\<your_client_id\>
+GITLAB_CLIENT_SECRET=\<your_client_secret\>
 ```
 
 ### Markdown awnsers for questions
@@ -42,6 +46,8 @@ SECRET_KEY=\<your_secret_key\> # Replace with your own secret key and make it lo
 #### [Awnsers for 2c)](anwsers/2c.md)
 
 #### [Awnsers for 2d)](anwsers/2d.md)
+
+#### [Awnsers for 2e)](anwsers/2e.md)
 
 # Copyright
 
