@@ -1,0 +1,30 @@
+{% extends "_layout.html" %} {% block title %}Home{% endblock %} {% block content %} {% for user in
+users %}
+<div class="buddie-container">
+    {% if user["info"].get("picture_url") and user["friendship"] in ["requested", "friends"]%}
+    <img
+        src="{{ user['info']['picture_url'] }}"
+        alt="{{ user['username'] }}'s profile picture"
+        class="pic"
+    />
+    {% else %}
+    <img src="../static/unknown.png" alt="{{ user['username'] }}'s profile picture" class="pic" />
+    {% endif %}
+    <div class="buddie-container-info">
+        <h1 class="value"
+            >{{ user["username"] }}
+            <span
+                >{% if user["friendship"] == 'friends' %}
+                <a href="/users/{{ user['id'] }}">View profile</a>
+                {% endif %} {% if user["friendship"] == 'requested' %}
+                <a href="/users/{{ user['id'] }}">View profile</a>
+                {% endif %}
+            </span></h1
+        >
+
+        {% if user["friendship"] != "none" %}
+        <p>Friendship status <span class="fstatus">{{ user["friendship"] }}</span></p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %} {% endblock %}

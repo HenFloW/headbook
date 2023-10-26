@@ -10,10 +10,10 @@
     // It's `async` because we need to `await` the result of network requests.
     document.addEventListener('DOMContentLoaded', async (ev) => {
         let users = await list_users();
-        users = users.map((user) => {
+        users = users.map(async (user) => {
             // for each user...
             // make an element to display on the page
-            const elt = format_profile(user);
+            const elt = await format_profile(user);
 
             // add an event handler to catch clicks
             elt.addEventListener('click', async (ev) => {
@@ -25,11 +25,14 @@
                     // we clicked anywhere else in the user entry
                     elt.classList.toggle('open'); // open/close the profile details
                     const details = await get_profile(user.id); // fetch/refresh profile
-                    if (details) format_profile(details, elt);
+                    if (details) await format_profile(details, elt);
                 }
             });
             return elt;
         });
+
+        // wait for all the user elements to be created
+        users = await Promise.all(users);
 
         document.getElementById('users').replaceChildren(...users);
     });
