@@ -25,11 +25,23 @@ You can exit the virtual environment with the command `deactivate`.
 flask -A headbook:app run --reload
 ```
 
+### Add .env file
+
+**This should be in the root directory**
+
+```sh
+SECRET_KEY=\<your_secret_key\> # Replace with your own secret key and make it long
+```
+
 ### Markdown awnsers for questions
 
 #### [Awnsers for 2a)](anwsers/2a.md)
 
 #### [Awnsers for 2b)](anwsers/2b.md)
+
+#### [Awnsers for 2c)](anwsers/2c.md)
+
+#### [Awnsers for 2d)](anwsers/2d.md)
 
 # Copyright
 

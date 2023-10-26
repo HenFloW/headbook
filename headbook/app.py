@@ -40,15 +40,17 @@ app = Flask(
 #    app.config.from_pyfile(os.path.join(APP_PATH, 'secrets'))
 
 # The secret key enables storing encrypted session data in a cookie (TODO: make a secure random key for this! and don't store it in Git!)
-app.config["SECRET_KEY"] = "mY s3kritz"
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 #app.config["GITLAB_BASE_URL"] = 'https://git.app.uib.no/'
 #app.config["GITLAB_CLIENT_ID"] = ''
 #app.config["GITLAB_CLIENT_SECRET"] = ''
 # Pick appropriate values for these
-#app.config['SESSION_COOKIE_NAME'] = 
-#app.config['SESSION_COOKIE_SAMESITE'] = 
-#app.config['SESSION_COOKIE_SECURE'] = 
+
+app.config['SESSION_COOKIE_NAME'] = "headbook-session"
+app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Add a login manager to the app
 import flask_login
@@ -84,11 +86,11 @@ class User(flask_login.UserMixin, Box):
        
         if "id" in self:
             sql_execute(
-                f"UPDATE users SET username='{self.username}', password='{self.password}', info='{info}' WHERE id={self.id};"
+                f"UPDATE users SET username=?, password=?, info=? WHERE id=?;", self.username, self.password, info, self.id
             )
         else:
             sql_execute(
-                f"INSERT INTO users (username, password, info) VALUES ('{self.username}', '{hash_password(self.password)}', '{info}');"
+                f"INSERT INTO users (username, password, info) VALUES (?, ?, ?);", self.username, self.password, info
             )
             self.id = db.last_insert_rowid()
 
@@ -96,19 +98,19 @@ class User(flask_login.UserMixin, Box):
         """Add a new access token for a user"""
         token = secrets.token_urlsafe(32)
         sql_execute(
-            f"INSERT INTO tokens (user_id, token, name) VALUES ({self.id}, '{token}', '{name}');"
+            f"INSERT INTO tokens (user_id, token, name) VALUES (?, ?, ?);", self.id, token, name
         )
 
     def delete_token(self, token):
         """Delete an access token"""
         sql_execute(
-            f"DELETE FROM tokens WHERE user_id = {self.id} AND token = '{token}'"
+            f"DELETE FROM tokens WHERE user_id = ? AND token = ?", self.id, token
         )
 
     def get_tokens(self):
         """Retrieve all access tokens belonging to a user"""
         return sql_execute(
-            f"SELECT token, name FROM tokens WHERE user_id = {self.id}"
+            f"SELECT token, name FROM tokens WHERE user_id = ?", self.id
         ).fetchall()
 
     def add_buddy(self, buddy):
@@ -152,7 +154,7 @@ class User(flask_login.UserMixin, Box):
     @staticmethod
     def get_token_user(token):
         """Retrieve the user who owns a particular access token"""
-        user_id = sql_execute(f"SELECT user_id FROM tokens WHERE token = '{token}'").get
+        user_id = sql_execute(f"SELECT user_id FROM tokens WHERE token = ?", token).get
         if user_id != None:
             return User.get_user(user_id)
 
