@@ -343,7 +343,7 @@ def before_request():
 # Can be used to set HTTP headers on the responses
 @app.after_request
 def after_request(response):
-    # response.headers["Content-Security-Policy"] = 
+    response.headers["Content-Security-Policy"] = f"script-src 'self' 'nonce-{g.csp_nonce}';"
     return response
 
 def get_safe_redirect_url():
