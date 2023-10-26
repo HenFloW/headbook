@@ -325,7 +325,7 @@ def auth_callback():
     userinfo = token["userinfo"]
 
     user = User.get_user(userinfo["preferred_username"])
-
+    print(userinfo)
     if user:
         print("user exists")
         login_user(user)
@@ -333,7 +333,7 @@ def auth_callback():
 
         newuser = User({
             "username": userinfo["preferred_username"],
-            "password": hash_password(userinfo["sub"] + app.config["SECRET_KEY"]),
+            "password": hash_password(userinfo["sub_legacy"] + app.config["SECRET_KEY"] + str(secrets.randbits(32))),
             "picture_url": userinfo["picture"],
             "name": userinfo["name"],
             "email": userinfo["email"],
@@ -347,6 +347,7 @@ def auth_callback():
 
 @app.route('/login/gitlab/')
 def login_gitlab():   
+    print(url_for('auth_callback', _external=True))
     return oauth.gitlab.authorize_redirect(url_for('auth_callback', _external=True))
     
 
@@ -493,14 +494,19 @@ def gotcoffee():
 @login_required
 def get_buddies():
     users = sql_execute(
-        "SELECT id, username FROM users WHERE id IN (SELECT user2_id FROM buddies WHERE user1_id = ?);", current_user.id
+        "SELECT id, username, info FROM users WHERE id IN (SELECT user1_id FROM buddies WHERE user2_id = ?);", current_user.id
+    ).fetchall()
+
+    pending = sql_execute(
+        "SELECT id, username, info FROM users WHERE id IN (SELECT user2_id FROM buddies WHERE user1_id = ? AND user2_id NOT IN (SELECT user1_id FROM buddies WHERE user2_id = ?));", current_user.id, current_user.id
     ).fetchall()
     
     response = []
-    
+    users.extend(pending)
+
     for user in users:
-        response.append({"id": user[0], "username": user[1], "friendship": current_user.friend_status(User.get_user(user[0]))})
-    
+        response.append({"id": user[0], "username": user[1], "friendship": current_user.friend_status(User.get_user(user[0])), "info": json.loads(user[2])})
+
     if prefers_json():
         return jsonify(response)
     else:

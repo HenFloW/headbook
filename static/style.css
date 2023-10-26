@@ -214,3 +214,36 @@ button[data-action='remove_friend'] {
     --button-text: #333;
     --button-hover-color: #bbb;
 }
+
+.buddie-container {
+    display: flex;
+    position: relative;
+    flex-direction: row;
+    height: 75px;
+    padding: 5px;
+    margin: 10px;
+    background-color: #eee;
+    border-radius: 5px;
+    gap: 1em;
+}
+
+.buddie-container-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.buddie-container-info > * {
+    margin: 0;
+    padding: 0;
+}
+
+.buddie-container-info h1 {
+    font-size: 1rem;
+    font-weight: bold;
+    text-transform: capitalize;
+}
+
+.buddie-container-info .fstatus {
+    font-weight: bold;
+}
