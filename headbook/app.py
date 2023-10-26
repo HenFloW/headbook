@@ -401,15 +401,32 @@ def get_user(userid):
     else:
         u = User.get_user(userid)
 
+    status = current_user.friend_status(u)
+   
+    if status != "friends" and status != "requested" and status != "self":
+        u = {
+            "id": u.id,
+            "username": u.username,
+            "friend status": status,
+        }
+    else:
+        u = u.to_dict()
+        u["friend status"] = status
+        if status == "self":
+            u[""] = "Your profile"
+            del u["friend status"]
+
     if u:
-        del u["password"] # hide the password, just in case
+        try:
+            del u["password"] # hide the password, just in case
+        except KeyError:
+            pass
         if prefers_json():
             return jsonify(u)
         else:
             return render_template("users.html", users=[u])
     else:
         abort(404)
-
 
 @app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
 @login_required
