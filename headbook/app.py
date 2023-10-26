@@ -240,6 +240,10 @@ def request_loader(request):
 #      * current_user – a User object with the currently logged in user (if any)
 
 
+@app.get("/current_user_id")
+def get_current_user_id():
+    return jsonify(current_user.id)
+
 @app.get("/")
 @app.get("/index.html")
 @login_required

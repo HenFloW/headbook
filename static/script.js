@@ -74,12 +74,39 @@ export function format_field(key, value, options = {}) {
  * @returns elt or a new element
  */
 export async function format_profile(user, elt) {
+    // added this route so you could not set the user id from the console to bypass the security
+    window.current_user_id = await fetch_json('/current_user_id', 'GET');
+
     if (!elt) elt = document.createElement('div');
     elt.classList.add('user'); // set CSS class
     if (user.id == current_user_id) {
         // current_user_id is a global variable (set on 'window')
         elt.classList.add('me');
     }
+
+    // get friendship status
+    const friendship_status = await fetch_json(`/buddies/${user.id}`, 'GET');
+
+    // if not friends, this will show
+    let more = html`<i>Become friends with ${user.username} to see their profile</i>`;
+
+    if (
+        friendship_status.status == 'friends' ||
+        user.id == current_user_id ||
+        friendship_status.status == 'requested'
+    ) {
+        // get the rest of the profile
+        more = html`
+            ${format_field('Birth date', user.birthdate)}
+            ${format_field(
+                'Favourite colour',
+                html`${user.color}
+                    <div class="color-sample" style="${'background:' + user.color}"></div>`,
+            )}
+            ${format_field('About', user.about, 'long')}
+        `;
+    }
+
     render(
         elt,
         html`
@@ -89,15 +116,7 @@ export async function format_profile(user, elt) {
             />
             <div class="data">
                 ${format_field('Name', user.username)}
-                <div class="more">
-                    ${format_field('Birth date', user.birthdate)}
-                    ${format_field(
-                        'Favourite colour',
-                        html`${user.color}
-                            <div class="color-sample" style="${'background:' + user.color}"></div>`,
-                    )}
-                    ${format_field('About', user.about, 'long')}
-                </div>
+                <div class="more">${more}</div>
             </div>
             <div class="controls" data-controls-id="${user.id}">
                 ${await generate_friendship_controls(user)}
@@ -116,6 +135,8 @@ const action_enum = {
 };
 
 const generate_friendship_controls = async (user) => {
+    window.current_user_id = await fetch_json('/current_user_id', 'GET');
+
     if (!user.id) return html``;
     if (user.id == current_user_id) return html``;
 
