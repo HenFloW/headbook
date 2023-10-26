@@ -6,7 +6,7 @@ class ProfileForm(FlaskForm):
     username = StringField('Username', render_kw={'readonly': True})
     password = PasswordField('Password', [
         validators.optional(),
-        validators.equal_to('password_again', message='Passwords must match'),
+        validators.equal_to('password_again', message='match'),
         validators.Length(min=8, max=-1, message='be minimum 8 characters long'), 
         validators.Regexp('^(?=.*[a-z]).+$', message='contain at least one lowercase letter'),
         validators.Regexp('^(?=.*[A-Z]).+$', message='contain at least one uppercase letter'),

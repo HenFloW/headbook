@@ -1,7 +1,7 @@
 {% macro render_field(field, extra_data) %}
 <div class="form-field">
     {{ field.label }} {{ field(**kwargs) }} {{ extra_data|safe }} {% if field.errors %}
-    <span class="error">{{field.errors|join(", ")}}</span>
+    <span class="error">Password must {{field.errors|join(", ")}}</span>
     {% endif %}
 </div>
 {% endmacro %}
