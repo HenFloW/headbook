@@ -1,5 +1,3 @@
-![link styles](MDSTYLES.md)
-
 # “HeadBook” Example Project (INF226, 2023)
 
 -   Flask docs: https://flask.palletsprojects.com/en/3.0.x/
@@ -30,12 +28,6 @@ flask -A headbook:app run --reload
 ### Markdown awnsers for questions
 
 #### [Awnsers for 2a)](anwsers/2a.md)
-
-<div class="prevblock">
-
-![Markdown](anwsers/2a.md)
-
-</div>
 
 # Copyright
 
