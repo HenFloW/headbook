@@ -100,7 +100,7 @@ class User(flask_login.UserMixin, Box):
             )
         else:
             sql_execute(
-                f"INSERT INTO users (username, password, info) VALUES (?, ?, ?);", self.username, self.password, info
+                f"INSERT INTO users (username, password, info) VALUES (?, ?, ?);", self.username, hash_password(self.password), info
             )
             self.id = db.last_insert_rowid()
 
