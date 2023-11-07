@@ -22,5 +22,5 @@ class ProfileForm(FlaskForm):
     picture_url = URLField(
         'Picture URL', [validators.url(), validators.optional()])
     about = TextAreaField(
-        'About', [validators.optional(), validators.Length(max=600)])
+        'About', [validators.optional(), validators.Length(max=600, message='be maximum 600 characters long')])
     save = SubmitField('Save changes')

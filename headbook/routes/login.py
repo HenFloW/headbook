@@ -4,6 +4,7 @@ from headbook import app, user_loader
 from headbook.modules.utils import debug, safe_redirect_next
 from headbook.forms.login_form import LoginForm
 from headbook.modules.hashing import check_password
+from headbook.modules.rate_limiter import rate_limiter
 
 
 @app.route("/login/", methods=["GET", "POST"])
@@ -24,12 +25,20 @@ def login():
         if form.validate():
             username = form.username.data
             password = form.password.data
-            user = user_loader(username)
-            if user and check_password(user.password, password):
+            user = try_login(username, password)
+            if user:
                 # automatically sets logged in session cookie
                 login_user(user)
-
                 flash(f"User {user.username} Logged in successfully.")
-
                 return safe_redirect_next()
     return render_template("login.html", form=form)
+
+
+@rate_limiter(5, "10s")
+def try_login(username, password):
+    user = user_loader(username)
+    if user and check_password(user.password, password):
+        # automatically sets logged in session cookie
+        login_user(user)
+        return user
+    return None
