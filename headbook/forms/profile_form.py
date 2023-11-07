@@ -7,15 +7,20 @@ class ProfileForm(FlaskForm):
     password = PasswordField('Password', [
         validators.optional(),
         validators.equal_to('password_again', message='match'),
-        validators.Length(min=8, max=-1, message='be minimum 8 characters long'), 
-        validators.Regexp('^(?=.*[a-z]).+$', message='contain at least one lowercase letter'),
-        validators.Regexp('^(?=.*[A-Z]).+$', message='contain at least one uppercase letter'),
-        validators.Regexp('^(?=.*\d).+$', message='contain at least one digit'),
+        validators.Length(
+            min=8, max=-1, message='be minimum 8 characters long'),
+        validators.Regexp(
+            '^(?=.*[a-z]).+$', message='contain at least one lowercase letter'),
+        validators.Regexp(
+            '^(?=.*[A-Z]).+$', message='contain at least one uppercase letter'),
+        validators.Regexp(
+            '^(?=.*\d).+$', message='contain at least one digit'),
         validators.Regexp('^(?=.*(_|[^\w])).+$', message='contain at least one special character')])
     password_again = PasswordField('Repeat Password')
     birthdate = DateField('Birth date', [validators.optional()])
     color = StringField('Favourite color')
-    picture_url = URLField('Picture URL', [validators.url(), validators.optional()])
-    about = TextAreaField('About')
+    picture_url = URLField(
+        'Picture URL', [validators.url(), validators.optional()])
+    about = TextAreaField(
+        'About', [validators.optional(), validators.Length(max=600)])
     save = SubmitField('Save changes')
-
