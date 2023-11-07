@@ -49,6 +49,10 @@ GITLAB_CLIENT_SECRET=\<your_client_secret\>
 
 #### [Awnsers for 2e)](anwsers/2e.md)
 
+_Improvements made in 3_
+
+#### [Improvements for 3b)](anwsers/3b.md)
+
 # Copyright
 
 -   `unknown.png` – from [OpenMoji](https://openmoji.org/about/) ([Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/))
