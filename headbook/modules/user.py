@@ -3,7 +3,7 @@ from .hashing import hash_password
 from flask_login import UserMixin
 import secrets
 from box import Box
-from .db import sql_execute, db
+from .db import sql_execute
 
 
 class User(UserMixin, Box):
@@ -11,6 +11,8 @@ class User(UserMixin, Box):
         super().__init__(user_data)
 
     def save(self):
+        from .db import db
+
         """Save this user object to the database"""
         info = json.dumps(
             {k: self[k]

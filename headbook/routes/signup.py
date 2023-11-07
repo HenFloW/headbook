@@ -5,6 +5,7 @@ from headbook.modules.utils import debug, safe_redirect_next
 from headbook.forms.signup_form import SignupForm
 from headbook.modules.user import User
 from headbook.modules.utils import debug, safe_redirect_next
+from headbook.modules.rate_limiter import rate_limiter
 
 
 @app.route("/signup/", methods=["GET", "POST"])
@@ -28,9 +29,15 @@ def signup():
             if user:
                 flash(f"User {username} already exists.")
             else:
-                user = User({"username": username, "password": password})
-                user.save()
-                login_user(user)
-                flash(f"User {username} created successfully.")
+                create_user(username, password)
                 return safe_redirect_next()
     return render_template("signup.html", form=form)
+
+
+@rate_limiter(3, "5m")
+def create_user(username, password):
+    user = User({"username": username, "password": password})
+    user.save()
+    login_user(user)
+    flash(f"User {username} created successfully.")
+    return user
