@@ -118,9 +118,7 @@ export async function format_profile(user, elt) {
                 ${format_field('Name', user.username)}
                 <div class="more">${more}</div>
             </div>
-            <div class="controls" data-controls-id="${user.id}">
-                ${await generate_friendship_controls(user)}
-            </div>
+            <div class="controls"> ${await generate_friendship_controls(user)} </div>
         `,
     );
     return elt;
@@ -160,23 +158,13 @@ const generate_friendship_controls = async (user) => {
         action = action_enum.remove_friend;
     }
     if (friendship_status == 'requested') {
-        return html`<button
-                type="button"
-                data-user-id="${user.id}"
-                data-action="${action_enum.accept_request}"
+        return html`<button type="button" data-action="${action_enum.accept_request}"
                 >Accept</button
             >
-            <button
-                type="button"
-                data-user-id="${user.id}"
-                data-action="${action_enum.reject_request}"
-                >Reject</button
-            >`;
+            <button type="button" data-action="${action_enum.reject_request}">Reject</button>`;
     }
 
-    return html`<button type="button" data-user-id="${user.id}" data-action="${action}"
-        >${text}</button
-    >`;
+    return html`<button type="button" data-action="${action}">${text}</button>`;
 };
 
 /**
@@ -190,14 +178,12 @@ const generate_friendship_controls = async (user) => {
 export async function do_action(id, element) {
     let did_action = false;
     let response = {};
-
     if ([action_enum.add_request, action_enum.accept_request].includes(element.dataset.action)) {
-        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'POST', {
+        response = await fetch_json(`/buddies/${id}`, 'POST', {
             action: element.dataset.action,
         });
         did_action = true;
     }
-
     if (
         [
             action_enum.reject_request,
@@ -205,7 +191,7 @@ export async function do_action(id, element) {
             action_enum.remove_friend,
         ].includes(element.dataset.action)
     ) {
-        response = await fetch_json(`/buddies/${element.dataset.userId}`, 'DELETE', {
+        response = await fetch_json(`/buddies/${id}`, 'DELETE', {
             action: element.dataset.action,
         });
         did_action = true;
@@ -213,9 +199,8 @@ export async function do_action(id, element) {
 
     if (did_action) {
         if (response.ok) {
-            const id = response.user;
             const button = await generate_friendship_controls({ id });
-            const controls = document.querySelector(`.controls[data-controls-id="${id}"]`);
+            const controls = element.parentElement;
             if (button && controls) {
                 render(controls, button);
             }

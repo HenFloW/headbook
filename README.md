@@ -49,6 +49,20 @@ GITLAB_CLIENT_SECRET=\<your_client_secret\>
 
 #### [Awnsers for 2e)](anwsers/2e.md)
 
+_Review of Joachim.Henriksen_headbook_
+
+#### [Awnsers for 3a)](anwsers/3a.md)
+
+_Improvements made in 3b_
+
+#### [Improvements for 3b)](anwsers/3b.md)
+
+To se the final commit for task 2 go to this commit: [Final commit for task 2](https://git.app.uib.no/inf226/23h/assignment-2/Henrik.F.Wilhelmsen_headbook/-/tree/4126b83591de45682ba9b4b3f611d68d9b50d8ff)
+
+This can be viewed locally by checking out to `git checkout 4126b83591de45682ba9b4b3f611d68d9b50d8ff`
+
+The current commit is the final commit for task 3.
+
 # Copyright
 
 -   `unknown.png` – from [OpenMoji](https://openmoji.org/about/) ([Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/))

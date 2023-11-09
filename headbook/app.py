@@ -1,30 +1,18 @@
-import flask, apsw, sys, os, secrets, json
-from datetime import date
+import flask_login
+import os
+import secrets
 from http import HTTPStatus
-from typing import Any
 from flask import (
     Flask,
     abort,
     g,
-    jsonify,
-    redirect,
-    request,
-    send_from_directory,
-    make_response,
-    render_template,
-    session,
-    url_for,
 )
-from urllib.parse import urlparse
 from werkzeug.datastructures import WWWAuthenticate
 from base64 import b64decode
-from box import Box
-from .login_form import LoginForm
-from .profile_form import ProfileForm
-from .signup_form import SignupForm
-from .utils import check_password, hash_password
 from authlib.integrations.flask_client import OAuth
-db = None
+from headbook.modules.db import sql_init
+from headbook.modules.utils import debug
+from headbook.modules.user import User
 
 ################################
 # Set up app
@@ -35,6 +23,7 @@ app = Flask(
     template_folder=os.path.join(APP_PATH, "templates/"),
     static_folder=os.path.join(APP_PATH, "static/"),
 )
+
 # You can also load app configuration from a Python file – this could
 # be a convenient way of loading secret tokens and other configuration data
 # that shouldn't be pushed to Git.
@@ -43,9 +32,9 @@ app = Flask(
 # The secret key enables storing encrypted session data in a cookie (TODO: make a secure random key for this! and don't store it in Git!)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
 app.config["TEMPLATES_AUTO_RELOAD"] = True
-#app.config["GITLAB_BASE_URL"] = 'https://git.app.uib.no/'
-#app.config["GITLAB_CLIENT_ID"] = ''
-#app.config["GITLAB_CLIENT_SECRET"] = ''
+# app.config["GITLAB_BASE_URL"] = 'https://git.app.uib.no/'
+# app.config["GITLAB_CLIENT_ID"] = ''
+# app.config["GITLAB_CLIENT_SECRET"] = ''
 # Pick appropriate values for these
 
 app.config['SESSION_COOKIE_NAME'] = "headbook-session"
@@ -54,8 +43,6 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Add a login manager to the app
-import flask_login
-from flask_login import current_user, login_required, login_user
 
 login_manager = flask_login.LoginManager()
 login_manager.init_app(app)
@@ -71,114 +58,26 @@ oauth.register(
 )
 
 ################################
+# For database access
 
-def debug(*args, **kwargs):
-    if request and '_user_id' in session:
-        print(f"[user={session.get('_user_id')}]  ", end='', file=sys.stderr)
-    print(*args, file=sys.stderr, **kwargs)
 
-def prefers_json():
-    return request.accept_mimetypes.best_match(['application/json', 'text/html']) == 'application/json'
+@app.teardown_appcontext
+def teardown_db(exception):
+    cursor = g.pop("cursor", None)
+    if cursor is not None:
+        cursor.close()
+
+
+with app.app_context():
+    sql_init()
+
+################################
+
 
 ################################
 # Class to store user info
 # UserMixin provides us with an `id` field and the necessary methods (`is_authenticated`, `is_active`, `is_anonymous` and `get_id()`).
 # Box makes it behave like a dict, but also allows accessing data with `user.key`.
-class User(flask_login.UserMixin, Box):
-    def __init__(self, user_data):
-        super().__init__(user_data)
-
-    def save(self):
-        """Save this user object to the database"""
-        info = json.dumps(
-            {k: self[k] for k in self if k not in ["username", "password", "id"]}
-        )
-       
-        if "id" in self:
-            sql_execute(
-                f"UPDATE users SET username=?, password=?, info=? WHERE id=?;", self.username, self.password, info, self.id
-            )
-        else:
-            sql_execute(
-                f"INSERT INTO users (username, password, info) VALUES (?, ?, ?);", self.username, hash_password(self.password), info
-            )
-            self.id = db.last_insert_rowid()
-
-    def add_token(self, name=""):
-        """Add a new access token for a user"""
-        token = secrets.token_urlsafe(32)
-        sql_execute(
-            f"INSERT INTO tokens (user_id, token, name) VALUES (?, ?, ?);", self.id, token, name
-        )
-
-    def delete_token(self, token):
-        """Delete an access token"""
-        sql_execute(
-            f"DELETE FROM tokens WHERE user_id = ? AND token = ?", self.id, token
-        )
-
-    def get_tokens(self):
-        """Retrieve all access tokens belonging to a user"""
-        return sql_execute(
-            f"SELECT token, name FROM tokens WHERE user_id = ?", self.id
-        ).fetchall()
-
-    def add_buddy(self, buddy):
-        """Add a buddy to a user's buddy list"""
-        return sql_execute(
-            f"INSERT INTO buddies (user1_id, user2_id) VALUES (?, ?)", self.id, buddy.id
-        )
-    
-    def delete_buddy(self, buddy):
-        """Delete a buddy from a user's buddy list"""
-        sql_execute(
-            f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
-        )
-        sql_execute(
-            f"DELETE FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
-        )
-    
-    def friend_status(self, buddy):
-        """Check if a user is a buddy of another user"""
-
-        added = sql_execute(
-            f"SELECT * FROM buddies WHERE user1_id = ? AND user2_id = ?", self.id, buddy.id
-        ).fetchone() != None
-
-        received = sql_execute(
-            f"SELECT * FROM buddies WHERE user1_id = ? AND user2_id = ?", buddy.id, self.id
-        ).fetchone() != None
-
-        
-        if(self.id == buddy.id):
-            return "self"
-        if(added and received):
-            return "friends"
-        if(added):
-            return "pending"
-        if(received):
-            return "requested"
-        
-        return "none"
-
-    @staticmethod
-    def get_token_user(token):
-        """Retrieve the user who owns a particular access token"""
-        user_id = sql_execute(f"SELECT user_id FROM tokens WHERE token = ?", token).get
-        if user_id != None:
-            return User.get_user(user_id)
-
-    @staticmethod
-    def get_user(userid):
-        if type(userid) == int or userid.isnumeric():
-            sql = f"SELECT id, username, password, info FROM users WHERE id = ?;"
-        else:
-            sql = f"SELECT id, username, password, info FROM users WHERE username = ?;"
-        row = sql_execute(sql, userid).fetchone()
-        if row:
-            user = User(json.loads(row[3]))
-            user.update({"id": row[0], "username": row[1], "password": row[2]})
-            return user
 
 
 # This method is called whenever the login manager needs to get
@@ -188,10 +87,11 @@ class User(flask_login.UserMixin, Box):
 def user_loader(user_id):
     return User.get_user(user_id)
 
-
 # This method is called to get a User object based on a request,
 # for example, if using an api key or authentication token rather
 # than getting the user name the standard way (from the session cookie)
+
+
 @login_manager.request_loader
 def request_loader(request):
     # Even though this HTTP header is primarily used for *authentication*
@@ -240,316 +140,11 @@ def request_loader(request):
     )
 
 ################################
-# ROUTES – these get called to handle requests
-#
-#    Before we get this far, Flask has set up a session store with a session cookie, and Flask-Login
-#    has dealt with authentication stuff (for routes marked `@login_required`)
-#
-#    Request data is available as global context variables:
-#      * request – current request object
-#      * session – current session (stores arbitrary session data in a dict-like object)
-#      * g – can store whatever data you like while processing the current request
-#      * current_user – a User object with the currently logged in user (if any)
 
+# Routes are moved into __init__.py
 
-@app.get("/current_user_id")
-@login_required
-def get_current_user_id():
-    return jsonify(current_user.id)
+################################
 
-@app.get("/")
-@app.get("/index.html")
-@login_required
-def index_html():
-    """Render the home page"""
-
-    return render_template("home.html")
-
-
-@app.get("/<filename>.<ext>")  # by default, path parameters (filename, ext) match any string not including a '/'
-def serve_static(filename, ext):
-    """Serve files from the static/ subdirectory"""
-
-    # browsers can be really picky about file types, so it's important 
-    # to set this correctly, particularly for JS and CSS
-    file_types = {
-        "js": "application/javascript",
-        "ico": "image/vnd.microsoft.icon",
-        "png": "image/png",
-        "html": "text/html",
-        "css": "text/css",
-    }
-
-    if ext in file_types:
-        return send_from_directory(
-            app.static_folder, f"{filename}.{ext}", mimetype=file_types[ext]
-        )
-    else:
-        abort(404)
-
-
-@app.route("/login/", methods=["GET", "POST"])
-def login():
-    """Render (GET) or process (POST) login form"""
-
-    debug('/login/ – session:', session, request.host_url)
-    form = LoginForm()
-
-    if not form.next.data:
-        form.next.data = flask.request.args.get("next") # set 'next' field from URL parameters
-
-    if form.is_submitted():
-        debug(
-            f'Received form:\n    {form.data}\n{"INVALID" if not form.validate() else "valid"} {form.errors}'
-        )
-        if form.validate():
-            username = form.username.data
-            password = form.password.data
-            user = user_loader(username)
-            if user and check_password(user.password, password):
-                # automatically sets logged in session cookie
-                login_user(user)
-
-                flask.flash(f"User {user.username} Logged in successfully.")
-
-                return safe_redirect_next()
-    return render_template("login.html", form=form)
-
-@app.route('/auth/callback/gitlab')
-def auth_callback():
-    token = oauth.gitlab.authorize_access_token()
-   
-    userinfo = token["userinfo"]
-
-    user = User.get_user(userinfo["preferred_username"])
-    print(userinfo)
-    if user:
-        print("user exists")
-        login_user(user)
-    else:
-
-        newuser = User({
-            "username": userinfo["preferred_username"],
-            "password": userinfo["sub_legacy"] + app.config["SECRET_KEY"] + str(secrets.randbits(32)),
-            "picture_url": userinfo["picture"],
-            "name": userinfo["name"],
-            "email": userinfo["email"],
-        })
-        
-        newuser.save()
-        newuser.add_token("gitlab")
-        login_user(newuser)
-
-    return safe_redirect_next()
-
-@app.route('/login/gitlab/')
-def login_gitlab():   
-    print(url_for('auth_callback', _external=True))
-    return oauth.gitlab.authorize_redirect(url_for('auth_callback', _external=True))
- 
-
-
-@app.get('/logout/')
-def logout_gitlab():
-    print('logout', session, session.get('access_token'))
-    flask_login.logout_user()
-    return redirect('/')
-
-
-@app.route("/signup/", methods=["GET", "POST"])
-def signup():
-    """Render (GET) or process (POST) signup form"""
-
-    debug('/signup/ – session:', session, request.host_url)
-    form = SignupForm()
-
-    if not form.next.data:
-        form.next.data = flask.request.args.get("next")
-    
-    if form.is_submitted():
-        debug(
-            f'Received form:\n    {form.data}\n{"INVALID" if not form.validate() else "valid"} {form.errors}'
-        )
-        if form.validate():
-            username = form.username.data
-            password = form.password.data
-            user = User.get_user(username)
-            if user:
-                flask.flash(f"User {username} already exists.")
-            else:
-                user = User({"username": username, "password": password})
-                user.save()
-                login_user(user)
-                flask.flash(f"User {username} created successfully.")
-                return safe_redirect_next()
-    return render_template("signup.html", form=form)
-
-@app.route("/profile/", methods=["GET", "POST", "PUT"])
-@login_required
-def my_profile():
-    """Display or edit user's profile info"""
-    debug("/profile/ – current user:", current_user, request.host_url)
-
-    form = ProfileForm()
-    if form.is_submitted():
-        debug(
-            f'Received form:\n    {form.data}\n    {f"INVALID: {form.errors}" if not form.validate() else "ok"}'
-        )
-        if form.validate():
-            if form.password.data: # change password if user set it
-                current_user.password = hash_password(form.password.data)
-            if form.birthdate.data: # change birthday if set
-                current_user.birthdate = form.birthdate.data.isoformat()
-            # TODO: do we need additional validation for these?
-            current_user.color = form.color.data
-            current_user.picture_url = form.picture_url.data
-            current_user.about = form.about.data
-            current_user.save()
-        else:
-            pass  # The profile.html template will display any errors in form.errors
-    else: # fill in the form with the user's info
-        form.username.data = current_user.username
-        form.password.data = ""
-        form.password_again.data = ""
-        # only set this if we have a valid date
-        form.birthdate.data = current_user.get("birthdate") and date.fromisoformat(
-            current_user.get("birthdate")
-        )
-        form.color.data = current_user.get("color", "")
-        form.picture_url.data = current_user.get("picture_url", "")
-        form.about.data = current_user.get("about", "")
-
-    return render_template("profile.html", form=form, user=current_user)
-
-
-@app.get("/users/")
-@login_required
-def get_users():
-    rows = sql_execute("SELECT id, username FROM users;").fetchall()
-
-    result = []
-    for row in rows:
-        user = User({"id": row[0], "username": row[1]})
-        result.append(user)
-
-    if prefers_json():
-        return jsonify(result)
-    else:
-        return render_template("users.html", users=result)
-
-
-@app.get("/users/<userid>")
-@login_required
-def get_user(userid):
-    if userid == 'me':
-        u = current_user
-    else:
-        u = User.get_user(userid)
-
-    status = current_user.friend_status(u)
-   
-    if status != "friends" and status != "requested" and status != "self":
-        u = {
-            "id": u.id,
-            "username": u.username,
-            "friend status": status,
-        }
-    else:
-        u = u.to_dict()
-        u["friend status"] = status
-        if status == "self":
-            u[""] = "Your profile"
-            del u["friend status"]
-
-    if u:
-        try:
-            del u["password"] # hide the password, just in case
-        except KeyError:
-            pass
-        if prefers_json():
-            return jsonify(u)
-        else:
-            return render_template("users.html", users=[u])
-    else:
-        abort(404)
-
-@app.get("/buddies/")
-@login_required
-def get_buddies():
-    users = sql_execute(
-        "SELECT id, username, info FROM users WHERE id IN (SELECT user1_id FROM buddies WHERE user2_id = ?);", current_user.id
-    ).fetchall()
-
-    pending = sql_execute(
-        "SELECT id, username, info FROM users WHERE id IN (SELECT user2_id FROM buddies WHERE user1_id = ? AND user2_id NOT IN (SELECT user1_id FROM buddies WHERE user2_id = ?));", current_user.id, current_user.id
-    ).fetchall()
-    
-    response = []
-    users.extend(pending)
-
-    for user in users:
-        response.append({"id": user[0], "username": user[1], "friendship": current_user.friend_status(User.get_user(user[0])), "info": json.loads(user[2])})
-
-    if prefers_json():
-        return jsonify(response)
-    else:
-        return render_template("buddies.html", users=response)
-
-@app.route("/buddies/<userid>", methods=["POST", "DELETE", "GET"])
-@login_required
-def get_buddie(userid):
-    user = User.get_user(userid)
-    
-    if (not user):
-        flask.flash(f"User {userid} does not exist.")
-        return jsonify({
-                "ok": False,
-                "error": "Invalid user",
-            })
-
-    if (request.method == "GET"):
-        status = current_user.friend_status(user)
-        return jsonify({
-            "ok": True,
-            "status": status,
-        })
-    
-    action = request.headers.get("action")
-    
-    if (not action):
-        return jsonify({
-            "ok": False,
-            "error": "No action specified",
-        })
-    
-    if(current_user.id == user.id):
-        flask.flash(f"Cannot add self as buddy.")
-        return jsonify({
-            "ok": False,
-            "error": "Cannot add self as buddy",
-        })
-
-    if request.method == "POST":
-        current_user.add_buddy(user)
-        return jsonify({
-            "ok": True,
-            "action": action,
-            "user": user.id,
-        })
-    elif request.method == "DELETE":
-        current_user.delete_buddy(user)
-        return  jsonify({
-            "ok": True,
-            "action": action,
-            "user": user.id,
-        })
-    
-    return jsonify(
-        {
-            "ok": False,
-            "error": "Invalid method",
-        }
-    )
 
 @app.before_request
 def before_request():
@@ -557,108 +152,9 @@ def before_request():
     g.csp_nonce = secrets.token_urlsafe(32)
 
 # Can be used to set HTTP headers on the responses
+
+
 @app.after_request
 def after_request(response):
     response.headers["Content-Security-Policy"] = f"script-src 'self' 'nonce-{g.csp_nonce}';"
     return response
-
-def get_safe_redirect_url():
-    # see discussion at 
-    # https://stackoverflow.com/questions/60532973/how-do-i-get-a-is-safe-url-function-to-use-with-flask-and-how-does-it-work/61446498#61446498
-    next = request.values.get('next')
-    if next:
-        url = urlparse(next)
-        if not url.scheme and not url.netloc: # ignore if absolute url
-            return url.path   # use only the path
-    return None
-
-def safe_redirect_next():
-    next = get_safe_redirect_url()
-    return redirect(next or '/')
-
-# For full RFC2324 compatibilty
-
-@app.get("/coffee/")
-def nocoffee():
-    abort(418)
-
-
-@app.route("/coffee/", methods=["POST", "PUT"])
-def gotcoffee():
-    return "Thanks!"
-
-
-################################
-# For database access
-
-def get_cursor():
-    if "cursor" not in g:
-        g.cursor = db.cursor()
-
-    return g.cursor
-
-
-@app.teardown_appcontext
-def teardown_db(exception):
-    cursor = g.pop("cursor", None)
-
-    if cursor is not None:
-        cursor.close()
-
-
-def sql_execute(stmt, *args, **kwargs):
-    debug(stmt, args or "", kwargs or "")
-    return get_cursor().execute(stmt, (*args,), **kwargs)
-
-
-def sql_init():
-    global db
-    db = apsw.Connection("./users.db")
-    if db.pragma("user_version") == 0:
-        sql_execute(
-            """CREATE TABLE IF NOT EXISTS users (
-            id integer PRIMARY KEY, 
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            info JSON NOT NULL);"""
-        )
-        sql_execute(
-            """CREATE TABLE IF NOT EXISTS tokens (
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            token TEXT NOT NULL UNIQUE,
-            name TEXT
-            );"""
-        )
-        sql_execute(
-            """CREATE TABLE IF NOT EXISTS buddies (
-            user1_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            user2_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            PRIMARY KEY (user1_id, user2_id)
-            );"""
-        )
-        alice = User(
-            {
-                "username": "alice",
-                "password": "password123",
-                "color": "green",
-                "picture_url": "https://git.app.uib.no/uploads/-/system/user/avatar/788/avatar.png",
-            }
-        )
-        alice.save()
-        alice.add_token("example")
-        bob = User({
-            "username": "bob", 
-            "password": "bananas", 
-            "color": "red"})
-        bob.save()
-        bob.add_token("test")
-        sql_execute(
-            f"INSERT INTO buddies (user1_id, user2_id) VALUES ({alice.id}, {bob.id}), ({bob.id}, {alice.id});"
-        )
-        sql_execute("PRAGMA user_version = 1;")
-
-
-with app.app_context():
-    sql_init()
-
-

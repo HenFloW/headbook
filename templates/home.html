@@ -20,7 +20,7 @@
                 // we can set the `data-action` attribute on an element to do
                 // something special (e.g., an "Add buddy" button)
                 if (ev.target.dataset.action) {
-                    do_action(current_user_id, ev.target);
+                    do_action(user.id, ev.target);
                 } else {
                     // we clicked anywhere else in the user entry
                     elt.classList.toggle('open'); // open/close the profile details
