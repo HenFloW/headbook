@@ -49,7 +49,11 @@ GITLAB_CLIENT_SECRET=\<your_client_secret\>
 
 #### [Awnsers for 2e)](anwsers/2e.md)
 
-_Improvements made in 3_
+_Review of Joachim.Henriksen_headbook_
+
+#### [Awnsers for 3a)](anwsers/3a.md)
+
+_Improvements made in 3b_
 
 #### [Improvements for 3b)](anwsers/3b.md)
 
